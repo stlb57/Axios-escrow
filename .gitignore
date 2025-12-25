@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment (The most important for your project)
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables / Secrets (cite: 1279)
+.env
+.flaskenv
+
+# IDE Settings
+.vscode/
+.idea/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
