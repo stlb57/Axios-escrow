@@ -1,173 +1,136 @@
-**OFFLINE ESCROW WALLET SYSTEM – BACKEND**
+---
 
-This project is a microservice-based backend for a secure **offline payment system**.
-It enables users to pay merchants via **Bluetooth**, without a real-time internet connection,
-using **escrow-backed, cryptographically signed tokens**.
+# **🚀 BlueMint: Offline Escrow Wallet System**
+
+**BlueMint** is a high-performance, microservice-based backend designed to enable **secure, offline user-to-merchant payments**. It solves the "Double Spend" problem in no-internet environments by using **Server-Authoritative Escrow** and **Cryptographically Signed Bearer Tokens**.
 
 ---
 
-**SYSTEM OVERVIEW**
+## **📁 Project Folder Structure**
 
-The system follows a **Value-Based model**, not a Balance-Based one.
+```text
+axios-escrow/
+├── 📂 escrow-backend/
+│   ├── 📂 auth-service/         # Identity & Device Integrity Gating
+│   ├── 📂 escrow-service/       # Fund Locking & Vault Management
+│   ├── 📂 token-service/        # Ed25519 Token Minting
+│   ├── 📂 settlement-service/   # Atomic Ledger & Payment Finality
+│   ├── 📂 transaction-service/  # History & Dashboard API
+│   ├── 📂 risk-service/         # Dynamic Limits & Anomaly Detection
+│   ├── 📂 admin-service/        # Dispute Resolution & Auditing
+│   ├── 📂 gateway-service/      # API Orchestration (Entry Point)
+│   └── 📂 shared/               # Shared Security & Crypto Utilities
+├── 📂 escrow-wallet/            # Android UI (HTML Prototype)
+├── 📄 .gitignore                # Environment protection
+└── 📄 README.md                 # Project Documentation
 
-- Funds are locked on the server
-- Value is converted into **single-use tokens**
-- Tokens represent a claim on locked money
-- Tokens are exchanged **offline**
-- Settlement happens **online**
-
-This prevents double spending and ensures security even when devices are offline.
-
----
-
-**CORE SERVICES**
-
-**1. Identity & Auth Service (Port 8000)**  
-Acts as the gatekeeper of the system.
-
-Responsibilities:
-- User identity management
-- App integrity verification
-- Integrity Gating (rooted/jailbroken device detection)
-
-Compromised devices are **blocked from offline features**.
+```
 
 ---
 
-**2. Escrow & Wallet Service (Port 8001)**  
-Manages balances and escrow vaults.
+## **🛠 Service-Wise Summary**
 
-Responsibilities:
-- Track spendable balance
-- Lock funds for offline usage
-- Prevent overspending
-
----
-
-**3. Token Management Service (Port 8002)**  
-Converts locked escrow into portable value.
-
-Responsibilities:
-- Mint fixed-denomination tokens
-- Cryptographically sign tokens
-- Ensure tokens are tamper-proof
+| Service | Port | **Core Responsibility** | **Key DevOps Feature** |
+| --- | --- | --- | --- |
+| **Auth** | `8000` | Gating access based on **Device Integrity** (Root/Debugger checks). | Fail-closed security posture. |
+| **Escrow** | `8001` | Moving spendable balance into a **Server-Locked Vault**. | Enforces strict ₹5,000 risk cap. |
+| **Token** | `8002` | Minting **Ed25519 signed payloads** for offline use. | Fixed-denomination fraud prevention. |
+| **Settlement** | `8003` | The **Final Authority**; moves real money to merchants. | Idempotent transaction handling. |
+| **Transaction** | `8004` | Aggregating "Pending" vs "Settled" states for UI. | Multi-service data projection. |
+| **Risk** | `8005` | Dynamic configuration of system limits and expiry. | Hot-swappable business rules. |
+| **Admin** | `8006` | Forensic audit tools for dispute resolution. | Immutable ledger reconstruction. |
+| **Gateway** | `8080` | **Orchestrator**; one call handles the entire offline setup. | Service-mesh traffic management. |
 
 ---
 
-**4. Settlement & Ledger Service (Port 8003)**  
-Final monetary authority.
+## **⚙️ Setup & Installation**
 
-Responsibilities:
-- Verify token authenticity
-- Enforce single-use tokens
-- Perform atomic settlement
-- Credit merchant wallets
+**1. Create the Environment**
 
----
-
-**PROJECT STRUCTURE**
-
-escrow-backend/
-├── .venv/                  # Python 3.12 virtual environment
-├── auth-service/           # Identity & app integrity
-├── escrow-service/         # Wallet & escrow vault
-├── token-service/          # Token minting & signing
-└── settlement-service/     # Ledger & settlement logic
-
----
-
-**SETUP INSTRUCTIONS**
-
-**Prerequisites**
-- Python 3.12
-- PowerShell (Windows)
-
----
-
-**Environment Setup**
-
-From the escrow-backend root directory:
-
+```powershell
+# Use Python 3.12 to create the venv
 python -m venv .venv
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+
+# Activate the venv
 .\.venv\Scripts\Activate.ps1
-pip install fastapi uvicorn PyJWT pydantic
+
+```
+
+**2. Install Requirements**
+
+```powershell
+# Install FastAPI, Cryptography, and Async HTTP tools
+pip install fastapi uvicorn PyJWT pydantic pynacl httpx
+
+```
 
 ---
 
-**RUNNING THE SERVICES**
+## **🧪 Testing Commands**
 
-Open four terminals, activate .venv in each, and run:
+To test the system flawlessly, run each service in a separate terminal window:
 
-Auth Service:
-uvicorn auth_service.main:app --reload --host 0.0.0.0 --port 8000
+**Step 1: Start the Gateway (The Entry Point)**
 
-Escrow Service:
-uvicorn escrow_service.main:app --reload --host 0.0.0.0 --port 8001
+```powershell
+cd escrow-backend/gateway-service
+uvicorn main:app --reload --host 0.0.0.0 --port 8080
 
-Token Service:
-uvicorn token_service.main:app --reload --host 0.0.0.0 --port 8002
+```
 
-Settlement Service:
-uvicorn settlement_service.main:app --reload --host 0.0.0.0 --port 8003
+**Step 2: Start Supporting Services**
 
-Note:
---host 0.0.0.0 allows external devices to connect via local IP.
+* **Auth:** `uvicorn auth-service.main:app --port 8000`
+* **Escrow:** `uvicorn escrow-service.main:app --port 8001`
+* **Token:** `uvicorn token-service.main:app --port 8002`
+* **Settlement:** `uvicorn settlement-service.main:app --port 8003`
 
----
+**Step 3: Run the End-to-End Test**
 
-**TESTING THE SERVICES**
+1. Open your browser to **`http://127.0.0.1:8080/docs`**.
+2. Locate the **`POST /gateway/prepare-offline`** endpoint.
+3. Execute with this **JSON Payload**:
 
-Each service exposes a Swagger UI.
-
----
-
-**Auth & Integrity Service**
-URL: http://127.0.0.1:8000/docs
-
-Test:
-POST /auth/verify-integrity
+```json
 {
-  "is_rooted": true
+  "wallet_id": "WLT-8F3A-92KD",
+  "phone": "919876543210",
+  "amount": 500.0,
+  "integrity_report": {
+    "device_id": "android_001",
+    "is_rooted": false,
+    "app_signature_valid": true,
+    "has_debugger": false,
+    "is_emulator": false
+  }
 }
 
-Expected:
-offline_mode_enabled = false
-
-This confirms the system **fails closed** on compromised devices.
+```
 
 ---
 
-**Escrow Locking**
-URL: http://127.0.0.1:8001/docs
+## **🔐 Core Security Invariants**
 
-Test:
-POST /wallet/lock-escrow for ₹500
+**1. Authority Separation**
+The Android app is **never** trusted to calculate its own balance. It only carries "Claims" (Tokens) which the **Settlement Service** validates against the **Escrow Vault**.
 
-Expected:
-- Spendable balance decreases
-- Escrow locked amount increases
+**2. Cryptographic Sealing**
+Every token is signed with an **Ed25519 Private Key**. If a hacker modifies a single bit of the token (e.g., changing ₹100 to ₹1000), the signature check fails immediately.
 
----
+**3. Idempotency Guard**
+The **Settlement Service** tracks `payment_request_id`. If a merchant's app retries a payment due to a bad network, the backend recognizes the ID and ensures **zero duplicate charges**.
 
-**Token Minting**
-URL: http://127.0.0.1:8002/docs
-
-Test:
-POST /tokens/mint for locked ₹500
-
-Expected:
-- List of signed tokens
-- Fixed denominations
+**4. Integrity Gating**
+Offline mode is a "High-Privilege" state. The **Auth Service** verifies the Android device's health before the **Gateway** allows money to be moved into Escrow.
 
 ---
 
-**Atomic Settlement**
-URL: http://127.0.0.1:8003/docs
+## **📱 Android UI Integration**
 
-Test:
-POST /settle using token_id
+* **`index.html`**: Connects to Port `8004` to show the "Pending" status of offline tokens.
+* **`pay.html` / `receive.html**`: These represent the Bluetooth handshake where Token JSONs are transferred.
+* **`profile.html`**: Connects to Port `8000` to show the "Security Integrity" status of the device.
 
-Expected:
-- First attempt: status = success
-- Second attempt: failure (double-spending prevention)
+---
+
+**"This system is intentionally designed to assume the network is broken, the device is hostile, and the transport is public—yet the money remains mathematically safe."**
