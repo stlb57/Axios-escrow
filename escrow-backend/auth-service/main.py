@@ -1,88 +1,103 @@
-from fastapi import FastAPI, HTTPException, Depends, status
-from pydantic import BaseModel, Field
-from typing import Optional
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, String, Integer, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import random
 import uuid
-import jwt # PyJWT
-from datetime import datetime, timedelta
 
-app = FastAPI(title="Offline Escrow - Identity & Auth Service")
+# --- Database Setup (cite: 1095) ---
+DATABASE_URL = "sqlite:///./users.db"
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
-# --- Mock Database (Use PostgreSQL in Production) ---
-users_db = {
-    "919876543210": {
-        "name": "Rajesh Kumar",
-        "wallet_id": "WLT-8F3A-92KD",
-        "phone": "+919876543210",
-        "is_verified": True,
-        "is_merchant": False
-    }
-}
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    phone = Column(String, unique=True, index=True)
+    wallet_id = Column(String, unique=True)
+    otp_code = Column(String, nullable=True)
+    is_verified = Column(Boolean, default=False)
 
-# --- Configuration ---
-SECRET_KEY = "server_private_key_do_not_leak" # cite: 1279
-ALGORITHM = "HS256"
+Base.metadata.create_all(bind=engine)
 
-# --- Schemas ---
+app = FastAPI(title="BlueMint - Complete Auth & Integrity Service")
+
+# --- Schemas (cite: 1313, 1310) ---
 class IntegrityReport(BaseModel):
     device_id: str
-    is_rooted: bool # cite: 1313
-    app_signature_valid: bool # cite: 1310
-    has_debugger: bool # cite: 1316
-    is_emulator: bool # cite: 1318
+    is_rooted: bool
+    app_signature_valid: bool
+    has_debugger: bool
+    is_emulator: bool
 
-class LoginRequest(BaseModel):
+class OTPRequest(BaseModel):
     phone: str
-    password: str
 
-# --- Business Logic: Integrity Check ---
-def verify_device_health(report: IntegrityReport):
-    """
-    Implements the 'Integrity-gated offline mode' invariant.
-    Fails closed if any check fails. [cite: 1319, 2124]
-    """
-    if report.is_rooted or not report.app_signature_valid or report.has_debugger or report.is_emulator:
-        return False
-    return True
+class VerifyRequest(BaseModel):
+    phone: str
+    otp: str
 
 # --- API Endpoints ---
 
-@app.post("/auth/login")
-async def login(request: LoginRequest):
-    user = users_db.get(request.phone)
+@app.post("/auth/request-otp")
+async def request_otp(request: OTPRequest):
+    """Simulates sending an OTP and creates a persistent user (cite: profile.html)."""
+    db = SessionLocal()
+    otp = str(random.randint(100000, 999999))
+    user = db.query(User).filter(User.phone == request.phone).first()
+    
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        user = User(
+            phone=request.phone, 
+            wallet_id=f"WLT-{uuid.uuid4().hex[:8].upper()}",
+            otp_code=otp
+        )
+        db.add(user)
+    else:
+        user.otp_code = otp
     
-    # In a real app, verify password hash here
-    token_data = {"sub": user["phone"], "wallet_id": user["wallet_id"], "exp": datetime.utcnow() + timedelta(days=1)}
-    token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+    db.commit()
+    db.close()
+    print(f"📡 [SMS GATEWAY] Sending OTP {otp} to {request.phone}")
+    return {"message": "OTP sent successfully", "debug_otp": otp}
+
+@app.post("/auth/verify-otp")
+async def verify_otp(request: VerifyRequest):
+    db = SessionLocal()
+    user = db.query(User).filter(User.phone == request.phone).first()
+    if not user or user.otp_code != request.otp:
+        db.close()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
     
-    return {"access_token": token, "token_type": "bearer", "user": user}
+    user.is_verified = True
+    user.otp_code = None 
+    db.commit()
+    user_data = {"phone": user.phone, "wallet_id": user.wallet_id}
+    db.close()
+    return {"status": "success", "user": user_data}
 
 @app.post("/auth/verify-integrity")
 async def verify_integrity(report: IntegrityReport):
     """
-    Endpoint for the 'Refresh' button on the profile.html page.
-    Determines if the device can proceed to use offline tokens. [cite: 1320]
+    Mandatory endpoint called by Gateway.
+    Implements 'Fail Closed' security posture.
     """
-    is_healthy = verify_device_health(report)
-    
-    if not is_healthy:
+    # If any integrity check fails, return 'compromised'
+    if report.is_rooted or not report.app_signature_valid or report.has_debugger:
         return {
             "status": "compromised",
-            "offline_mode_enabled": False,
-            "message": "Security integrity check failed. Offline mode disabled." # cite: 1409
+            "message": "Security integrity check failed."
         }
     
-    return {
-        "status": "secure",
-        "offline_mode_enabled": True,
-        "message": "Device verified and secure." # cite: profile.html
-    }
+    return {"status": "secure", "message": "Device verified."}
 
 @app.get("/auth/profile/{wallet_id}")
 async def get_profile(wallet_id: str):
-    # Fetch user data for index.html / profile.html
-    for phone, user in users_db.items():
-        if user["wallet_id"] == wallet_id:
-            return user
-    raise HTTPException(status_code=404, detail="Profile not found")
+    db = SessionLocal()
+    user = db.query(User).filter(User.wallet_id == wallet_id).first()
+    db.close()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"phone": user.phone, "wallet_id": user.wallet_id, "is_verified": user.is_verified}

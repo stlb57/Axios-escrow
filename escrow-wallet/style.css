@@ -1,0 +1,57 @@
+body {
+    background-color: #000;
+    color: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+}
+
+.app-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+}
+
+.balance-card {
+    background: linear-gradient(135deg, #1a1a1a 0%, #000 100%);
+    border: 1px solid #f0ff40;
+    padding: 30px;
+    border-radius: 20px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.balance-amount {
+    font-size: 3rem;
+    font-weight: bold;
+    color: #f0ff40;
+}
+
+.primary-btn {
+    background-color: #f0ff40;
+    color: #000;
+    border: none;
+    width: 100%;
+    padding: 15px;
+    border-radius: 10px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+.secondary-btn {
+    background-color: transparent;
+    color: #f0ff40;
+    border: 1px solid #f0ff40;
+    width: 100%;
+    padding: 15px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.status-msg {
+    color: #888;
+    font-size: 0.9rem;
+    margin-top: 10px;
+}

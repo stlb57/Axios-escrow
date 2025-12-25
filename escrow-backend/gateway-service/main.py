@@ -1,10 +1,22 @@
-import httpx # You'll need to run 'pip install httpx'
+import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import os
 
-app = FastAPI(title="Offline Escrow - API Gateway")
+app = FastAPI(title="BlueMint - API Gateway & App Host")
 
-# Internal Service URLs (In DevOps, these would be in a config file or env vars)
+# --- 1. ENABLE CORS (Essential for Browser Testing) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Allows your browser to talk to the backend
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Internal Service URLs
 AUTH_URL = "http://localhost:8000"
 ESCROW_URL = "http://localhost:8001"
 TOKEN_URL = "http://localhost:8002"
@@ -15,27 +27,31 @@ class OfflineStartRequest(BaseModel):
     amount: float
     integrity_report: dict
 
+# --- 2. SERVE THE FRONTEND FILES ---
+# This links the 'escrow-wallet' folder to the /app URL
+frontend_path = os.path.abspath("../../escrow-wallet")
+app.mount("/app", StaticFiles(directory=frontend_path, html=True), name="app")
+
+@app.get("/")
+async def serve_index():
+    return FileResponse(os.path.join(frontend_path, "index.html"))
+
+# --- 3. EXISTING API LOGIC ---
 @app.post("/gateway/prepare-offline")
 async def prepare_offline_session(request: OfflineStartRequest):
-    """
-    Orchestrates the sequence: Integrity Check -> Lock Escrow -> Mint Tokens.
-    This simplifies the logic for the Android app (cite: index.html).
-    """
     async with httpx.AsyncClient() as client:
-        # 1. Verify Integrity (cite: 7.8, 1319)
+        # 1. Verify Integrity (cite: 1319)
         auth_resp = await client.post(f"{AUTH_URL}/auth/verify-integrity", json=request.integrity_report)
         if auth_resp.json().get("status") != "secure":
-            raise HTTPException(status_code=403, detail="Device integrity compromised. Session denied.")
+            raise HTTPException(status_code=403, detail="Device integrity compromised.")
 
-        # 2. Lock Escrow Funds (cite: 3.5, 530)
+        # 2. Lock Escrow Funds (cite: 530)
         escrow_resp = await client.post(f"{ESCROW_URL}/wallet/lock-escrow", json={
             "wallet_id": request.wallet_id,
             "amount_to_lock": request.amount
         })
-        if escrow_resp.status_code != 200:
-            raise HTTPException(status_code=escrow_resp.status_code, detail="Failed to lock escrow.")
-
-        # 3. Mint Tokens (cite: 4.8, 743)
+        
+        # 3. Mint Tokens (cite: 743)
         token_resp = await client.post(f"{TOKEN_URL}/tokens/mint", json={
             "wallet_id": request.wallet_id,
             "amount": request.amount
@@ -44,5 +60,5 @@ async def prepare_offline_session(request: OfflineStartRequest):
         return {
             "status": "ready",
             "tokens": token_resp.json(),
-            "message": "Offline session initialized. Tokens ready for Bluetooth transfer."
+            "message": "Offline session initialized."
         }

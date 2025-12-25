@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlueMint Wallet</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>BlueMint</h1>
+            <div class="profile-icon">👤</div>
+        </header>
+
+        <main>
+            <section class="balance-card">
+                <h2>Spendable Balance</h2>
+                <div class="balance-amount" id="balance-amount">₹0.00</div>
+                <div class="escrow-locked">
+                    Locked for Offline: <span id="escrow-locked-amount">₹0.00</span>
+                </div>
+            </section>
+
+            <section class="actions">
+                <button onclick="prepareOffline()" class="primary-btn">Go Offline (Lock ₹500)</button>
+                <button onclick="updateDashboard()" class="secondary-btn">Refresh Balance</button>
+            </section>
+
+            <section class="status-feed">
+                <h3>System Status</h3>
+                <div id="status-message" class="status-msg">Ready.</div>
+            </section>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
