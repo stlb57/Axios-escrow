@@ -61,10 +61,16 @@ async def lock_escrow(request: EscrowRequest):
 async def burn_escrow(request: dict):
     """Permanently removes funds from the Locked Vault once settled."""
     db = SessionLocal()
-    wallet = db.query(Wallet).filter(Wallet.wallet_id == request['wallet_id']).first()
+    wallet_id = request.get('wallet_id')
+    amount = request.get('amount')
+    
+    print(f"🔥 SETTLEMENT RECEIVED: Burning ₹{amount} from {wallet_id}'s locked vault.")
+    
+    wallet = db.query(Wallet).filter(Wallet.wallet_id == wallet_id).first()
     if wallet:
-        wallet.escrow_locked -= request['amount']
+        wallet.escrow_locked -= amount
         db.commit()
+        print(f"✅ Success. New Locked Balance: ₹{wallet.escrow_locked}")
     db.close()
     return {"status": "burned"}
 
