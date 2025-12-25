@@ -29,7 +29,8 @@ class OfflineStartRequest(BaseModel):
 
 # --- 2. SERVE THE FRONTEND FILES ---
 # This links the 'escrow-wallet' folder to the /app URL
-frontend_path = os.path.abspath("../../escrow-wallet")
+current_dir = os.path.dirname(os.path.abspath(__file__))
+frontend_path = os.path.abspath(os.path.join(current_dir, "../../escrow-wallet"))
 app.mount("/app", StaticFiles(directory=frontend_path, html=True), name="app")
 
 @app.get("/")

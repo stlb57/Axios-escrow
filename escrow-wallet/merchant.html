@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Merchant Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header><h1>Merchant Terminal</h1></header>
+        <main>
+            <section class="balance-card" style="border-color: #40ff80;">
+                <h2>Total Earnings</h2>
+                <div class="balance-amount" id="merchant-balance" style="color: #40ff80;">₹0.00</div>
+            </section>
+            <section class="status-feed">
+                <h3>Last Settlements</h3>
+                <div id="settlement-log" class="status-msg">No transactions yet.</div>
+            </section>
+            <button onclick="refreshMerchant()" class="secondary-btn">Check for Payments</button>
+        </main>
+    </div>
+    <script src="merchant.js"></script>
+</body>
+</html>
