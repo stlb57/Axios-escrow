@@ -1,137 +1,106 @@
 
----
-
-# **🚀 BlueMint: Offline Escrow Wallet System**
-
-**BlueMint** is a high-performance, microservice-based backend designed to enable **secure, offline user-to-merchant payments**. It solves the "Double Spend" problem in no-internet environments by using **Server-Authoritative Escrow** and **Cryptographically Signed Bearer Tokens**.
 
 ---
 
-## **📁 Project Folder Structure**
+# **🚀 BlueMint: Detailed Project Specification**
 
-```text
-axios-escrow/
-├── 📂 escrow-backend/
-│   ├── 📂 auth-service/         # Identity & Device Integrity Gating
-│   ├── 📂 escrow-service/       # Fund Locking & Vault Management
-│   ├── 📂 token-service/        # Ed25519 Token Minting
-│   ├── 📂 settlement-service/   # Atomic Ledger & Payment Finality
-│   ├── 📂 transaction-service/  # History & Dashboard API
-│   ├── 📂 risk-service/         # Dynamic Limits & Anomaly Detection
-│   ├── 📂 admin-service/        # Dispute Resolution & Auditing
-│   ├── 📂 gateway-service/      # API Orchestration (Entry Point)
-│   └── 📂 shared/               # Shared Security & Crypto Utilities
-├── 📂 escrow-wallet/            # Android UI (HTML Prototype)
-├── 📄 .gitignore                # Environment protection
-└── 📄 README.md                 # Project Documentation
-
-```
+**BlueMint** is a secure, microservice-based fintech platform designed for **User-to-Merchant (U2M)** payments in environments without internet connectivity. It utilizes **Server-Authoritative Escrow**, **Ed25519 Cryptographic Signing**, and **Idempotent Settlement** to ensure that money remains mathematically safe, even when the device is offline.
 
 ---
 
-## **🛠 Service-Wise Summary**
+## **📁 1. Project Architecture & Ports**
 
-| Service | Port | **Core Responsibility** | **Key DevOps Feature** |
+Each service is a self-contained FastAPI application with its own persistent SQLite database.
+
+| Service | Port | Database | Core Responsibility |
 | --- | --- | --- | --- |
-| **Auth** | `8000` | Gating access based on **Device Integrity** (Root/Debugger checks). | Fail-closed security posture. |
-| **Escrow** | `8001` | Moving spendable balance into a **Server-Locked Vault**. | Enforces strict ₹5,000 risk cap. |
-| **Token** | `8002` | Minting **Ed25519 signed payloads** for offline use. | Fixed-denomination fraud prevention. |
-| **Settlement** | `8003` | The **Final Authority**; moves real money to merchants. | Idempotent transaction handling. |
-| **Transaction** | `8004` | Aggregating "Pending" vs "Settled" states for UI. | Multi-service data projection. |
-| **Risk** | `8005` | Dynamic configuration of system limits and expiry. | Hot-swappable business rules. |
-| **Admin** | `8006` | Forensic audit tools for dispute resolution. | Immutable ledger reconstruction. |
-| **Gateway** | `8080` | **Orchestrator**; one call handles the entire offline setup. | Service-mesh traffic management. |
+| **Auth** | `8000` | `users.db` | Identity, OTP verification, and **Device Integrity Gating**. |
+| **Escrow** | `8001` | `wallets.db` | Managing spendable balances and the **Locked Offline Vault**. |
+| **Token** | `8002` | *In-Memory* | Minting **Ed25519-signed** bearer tokens in fixed denominations. |
+| **Settlement** | `8003` | `ledger.db` | Verifying signatures, preventing **Double Spending**, and updating merchant earnings. |
+| **Transaction** | `8004` | *Internal* | Aggregating history and pending settlement status for the UI. |
+| **Risk** | `8005` | *Config* | Enforcing global limits (e.g., ₹5,000 cap) and anomaly detection. |
+| **Admin** | `8006` | *Audit* | Providing forensic audit trails for dispute resolution. |
+| **Gateway** | `8080` | *None* | **Orchestrator**: Single entry point that handles the entire locking/minting flow. |
 
 ---
 
-## **⚙️ Setup & Installation**
+## **🔄 2. The Fundamental Offline Loop**
 
-**1. Create the Environment**
+The system follows a strict three-phase security protocol:
+
+1. **Phase 1: Pre-Locking (Online)** The user moves money from their **Spendable Balance** to an **Escrow Locked** state. The system issues a JSON bundle of cryptographically signed tokens representing that specific value.
+2. **Phase 2: The Transfer (Offline)** The User App sends the signed JSON tokens to the Merchant App via **Bluetooth Low Energy (BLE)**. The merchant verifies the signature offline using the server's public key.
+3. **Phase 3: Settlement (Online)** The merchant connects to the internet and uploads the JSON tokens to the **Settlement Service**. The service verifies the signature one final time, credits the merchant's ledger, and calls the **Escrow Service** to "burn" (remove) the funds from the user's locked vault.
+
+---
+
+## **🛠 3. Setup & Environment**
+
+### **Initial Installation**
 
 ```powershell
-# Use Python 3.12 to create the venv
+# Create and activate a virtual environment
 python -m venv .venv
-
-# Activate the venv
 .\.venv\Scripts\Activate.ps1
 
+# Install core dependencies
+pip install fastapi uvicorn pydantic sqlalchemy pynacl httpx
+
 ```
 
-**2. Install Requirements**
+---
+
+## **💻 4. Execution Commands (Start Every Service)**
+
+Open a separate terminal window for each service. **Run all commands from the `escrow-backend` root folder** to ensure database paths are consistent.
+
+1. **Gateway:** `uvicorn gateway-service.main:app --reload --host 0.0.0.0 --port 8080`
+2. **Auth:** `uvicorn auth-service.main:app --reload --port 8000`
+3. **Escrow:** `uvicorn escrow-service.main:app --reload --port 8001`
+4. **Token:** `uvicorn token-service.main:app --reload --port 8002`
+5. **Settlement:** `uvicorn settlement-service.main:app --reload --port 8003`
+6. **Transaction:** `uvicorn transaction-service.main:app --reload --port 8004`
+7. **Risk:** `uvicorn risk-service.main:app --reload --port 8005`
+8. **Admin:** `uvicorn admin-service.main:app --reload --port 8006`
+
+---
+
+## **🧪 5. Testing the Full Lifecycle**
+
+### **Step 1: Admin Top-Up (₹50,000)**
+
+Before testing, add funds to your account via the Swagger UI:
+
+* URL: `http://localhost:8001/docs`
+* Endpoint: `POST /wallet/admin/topup`
+* JSON: `{"wallet_id": "WLT-8F3A-92KD", "amount": 50000.0}`
+
+### **Step 2: The User Interface**
+
+* **User Dashboard:** Open `http://localhost:8080/app/index.html`.
+* **Merchant Terminal:** Open `http://localhost:8080/app/merchant.html`.
+
+### **Step 3: Simulate Payment (End-to-End)**
+
+Run the provided `test_flow.py` script to lock new funds and settle them:
 
 ```powershell
-# Install FastAPI, Cryptography, and Async HTTP tools
-pip install fastapi uvicorn PyJWT pydantic pynacl httpx
+python test_flow.py
 
 ```
 
----
-
-## **🧪 Testing Commands**
-
-To test the system flawlessly, run each service in a separate terminal window:
-
-**Step 1: Start the Gateway (The Entry Point)**
-
-```powershell
-cd escrow-backend/gateway-service
-uvicorn main:app --reload --host 0.0.0.0 --port 8080
-
-```
-
-**Step 2: Start Supporting Services**
-
-* **Auth:** `uvicorn auth-service.main:app --port 8000`
-* **Escrow:** `uvicorn escrow-service.main:app --port 8001`
-* **Token:** `uvicorn token-service.main:app --port 8002`
-* **Settlement:** `uvicorn settlement-service.main:app --port 8003`
-
-**Step 3: Run the End-to-End Test**
-
-1. Open your browser to **`http://127.0.0.1:8080/docs`**.
-2. Locate the **`POST /gateway/prepare-offline`** endpoint.
-3. Execute with this **JSON Payload**:
-
-```json
-{
-  "wallet_id": "WLT-8F3A-92KD",
-  "phone": "919876543210",
-  "amount": 500.0,
-  "integrity_report": {
-    "device_id": "android_001",
-    "is_rooted": false,
-    "app_signature_valid": true,
-    "has_debugger": false,
-    "is_emulator": false
-  }
-}
-
-```
+* **Observation:** The User Dashboard will show the **Spendable Balance** decrease, while the **Merchant Terminal** shows an increase in earnings. Because the funds are "burned" upon settlement, the **Locked Balance** will return to ₹0.
 
 ---
 
-## **🔐 Core Security Invariants**
+## **🔐 6. Core Security Invariants**
 
-**1. Authority Separation**
-The Android app is **never** trusted to calculate its own balance. It only carries "Claims" (Tokens) which the **Settlement Service** validates against the **Escrow Vault**.
-
-**2. Cryptographic Sealing**
-Every token is signed with an **Ed25519 Private Key**. If a hacker modifies a single bit of the token (e.g., changing ₹100 to ₹1000), the signature check fails immediately.
-
-**3. Idempotency Guard**
-The **Settlement Service** tracks `payment_request_id`. If a merchant's app retries a payment due to a bad network, the backend recognizes the ID and ensures **zero duplicate charges**.
-
-**4. Integrity Gating**
-Offline mode is a "High-Privilege" state. The **Auth Service** verifies the Android device's health before the **Gateway** allows money to be moved into Escrow.
+* **Ed25519 Signing:** Every token is signed with a server-side private key using the format `{id}|{wallet}|{value}|{expiry}`.
+* **Double-Spend Prevention:** The `spent_tokens` table in the settlement database ensures no token ID is ever processed twice.
+* **Integrity Gating:** The **Auth Service** rejects any requests from devices that are rooted, have a debugger attached, or are running in an emulator.
+* **Idempotency:** The `payment_request_id` prevents a merchant from accidentally charging a user twice for the same transaction due to network retries.
 
 ---
 
-## **📱 Android UI Integration**
-
-* **`index.html`**: Connects to Port `8004` to show the "Pending" status of offline tokens.
-* **`pay.html` / `receive.html**`: These represent the Bluetooth handshake where Token JSONs are transferred.
-* **`profile.html`**: Connects to Port `8000` to show the "Security Integrity" status of the device.
-
----
-
-**"This system is intentionally designed to assume the network is broken, the device is hostile, and the transport is public—yet the money remains mathematically safe."**
+**"BlueMint assumes the device is hostile and the network is unreliable. Security is handled by the math, not the connection."**
